@@ -88,6 +88,30 @@ BOOL CALLBACK DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	}
 	return FALSE;
 }
+
+void ByteToBinaryString(unsigned char byte, char* str)
+{
+	for (int i = 7; i >= 0; i--)
+		str[7 - i] = (byte & (1 << i)) ? '1' : '0';
+	str[8] = '\0';
+}
+
+void IPAddressToBinaryString(DWORD dwIP, char* szBinaryIP)
+{
+	char octetBinary[9];
+	unsigned char octet;
+	szBinaryIP[0] = '\0';
+
+	for (int i = 0; i < 4; i++)
+	{
+		octet = (dwIP >> (8 * i)) & 0xFF;
+		ByteToBinaryString(octet, octetBinary);
+		strcat(szBinaryIP, octetBinary);
+		if (i < 3)
+			strcat(szBinaryIP, ".");
+	}
+}
+
 VOID SetIPPrefix(HWND hwnd)
 {
 	HWND hIPmask = GetDlgItem(hwnd, IDC_IPMASK);
@@ -104,29 +128,44 @@ VOID PrintInfo(HWND hwnd)
 {
 	CONST INT SIZE = 1024;
 	CHAR sz_info[SIZE]{};
-	CHAR sz_buffer[SIZE]{};
 	CHAR sz_NetworkIP_buffer[SIZE];
 	CHAR sz_BroadcastIP_buffer[SIZE];
 	CHAR sz_NumerOfIPs[SIZE];
 	CHAR sz_NumerOfHosts[SIZE];
-	CHAR sz_prefix[3];
+	CHAR sz_prefix[4];
+
 	HWND hIPaddress = GetDlgItem(hwnd, IDC_IPADDRESS);
 	HWND hIPmask = GetDlgItem(hwnd, IDC_IPMASK);
 	HWND hEditPrefix = GetDlgItem(hwnd, IDC_EDIT_PREFIX);
 	HWND hStaticInfo = GetDlgItem(hwnd, IDC_STATIC_INFO);
+
 	DWORD dwIPaddress = 0;
 	DWORD dwIPmask = 0;
 	DWORD dwIPprefix = 0;
 
 	SendMessage(hIPaddress, IPM_GETADDRESS, 0, (LPARAM)&dwIPaddress);
 	SendMessage(hIPmask, IPM_GETADDRESS, 0, (LPARAM)&dwIPmask);
-	SendMessage(hEditPrefix, WM_GETTEXT, 3, (LPARAM)sz_prefix);
+	SendMessage(hEditPrefix, WM_GETTEXT, 4, (LPARAM)sz_prefix);
 	dwIPprefix = atoi(sz_prefix);
 
-	sprintf(sz_NetworkIP_buffer, "Адрес сети:\t\t\t%s", IPaddressToString(dwIPaddress & dwIPmask, sz_buffer));
-	sprintf(sz_BroadcastIP_buffer, "Широковещательный адрес:\t%s", IPaddressToString(dwIPaddress | ~dwIPmask, sz_buffer));
-	sprintf(sz_NumerOfIPs, "Количество IP-адресов:\t%u", 1 << (32 - dwIPprefix));
-	sprintf(sz_NumerOfHosts, "Количество узлов:\t\t%u", (1 << (32 - dwIPprefix)) - 2);
+	CHAR sz_IPdec[16], sz_Maskdec[16];
+	CHAR sz_IPbin[36], sz_Maskbin[36];
+
+	DWORD dwNetwork = dwIPaddress & dwIPmask;
+
+	IPaddressToString(dwNetwork, sz_IPdec);
+	IPAddressToBinaryString(dwNetwork, sz_IPbin);
+	sprintf(sz_NetworkIP_buffer, "Адрес сети:\t\t\t%s\nВ двоичном виде:\t%s", sz_IPdec, sz_IPbin);
+
+	IPaddressToString(dwIPmask, sz_Maskdec);
+	IPAddressToBinaryString(dwIPmask, sz_Maskbin);
+	sprintf(sz_BroadcastIP_buffer, "Маска подсети:\t\t%s\nВ двоичном виде:\t%s", sz_Maskdec, sz_Maskbin);
+
+	unsigned long long numIPs = 1ULL << (32 - dwIPprefix);
+	unsigned long long numHosts = numIPs > 2 ? numIPs - 2 : 0;
+
+	sprintf(sz_NumerOfIPs, "Количество IP-адресов:\t%llu", numIPs);
+	sprintf(sz_NumerOfHosts, "Количество узлов:\t\t%llu", numHosts);
 
 	sprintf(sz_info, "%s\n%s\n%s\n%s", sz_NetworkIP_buffer, sz_BroadcastIP_buffer, sz_NumerOfIPs, sz_NumerOfHosts);
 	SendMessage(hStaticInfo, WM_SETTEXT, 0, (LPARAM)sz_info);
