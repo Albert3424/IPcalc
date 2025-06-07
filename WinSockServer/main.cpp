@@ -14,10 +14,12 @@ using namespace std;
 
 #define DEFAULT_PORT			"27015"
 #define DEFAULT_BUFFER_LENGTH	1500
+#define SZ_SORRY  "Sorry, but all is busy"
 
 void main()
 {
 	setlocale(LC_ALL, "");
+
 	WSAData wsaData;
 
 	int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -77,20 +79,37 @@ void main()
 	}
 
 	VOID WINAPI HandleClient(SOCKET ClientSocket);
-	CONST INT MAX_CLIENTS = 5;
+	CONST INT MAX_CLIENTS = 3;
 	SOCKET clients[MAX_CLIENTS] = {};
 	DWORD dwThreadIDs[MAX_CLIENTS] = {};
 	HANDLE hThreads[MAX_CLIENTS] = {};
 
 	INT i = 0;
 
-	while (i < 5)
+	while (true)
 	{
 		SOCKET ClientSocket = accept(ListenSocket, NULL, NULL);
-		clients[i] = ClientSocket;
-		hThreads[i] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)HandleClient, (LPVOID)clients[i], 0, &dwThreadIDs[i]);
-		i++;
+		if (i < MAX_CLIENTS)
+		{
+			clients[i] = ClientSocket;
+			hThreads[i] = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)HandleClient, (LPVOID)clients[i], 0, &dwThreadIDs[i]);
+			i++;
+		}
+		else
+		{
+			CHAR receive_buffer[DEFAULT_BUFFER_LENGTH] = {};
+			INT iResult = recv(ClientSocket, receive_buffer, DEFAULT_BUFFER_LENGTH, 0);
+			if (iResult > 0)
+			{
+				cout << "Bytes received: " << iResult << endl;
+				cout << "Message: " << receive_buffer << endl;
+				INT iSendResult = send(ClientSocket, SZ_SORRY, strlen(SZ_SORRY), 0);
+				closesocket(ClientSocket);
+			}
+		}
 	}
+
+	WaitForMultipleObjects(MAX_CLIENTS, hThreads, TRUE, INFINITE);
 
 	closesocket(ListenSocket);
 	freeaddrinfo(result);
